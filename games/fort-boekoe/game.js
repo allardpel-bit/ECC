@@ -112,17 +112,21 @@
 
     camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 600);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2.5));
     renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // betere kleur- en lichtkwaliteit
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     document.body.appendChild(renderer.domElement);
 
     // ---- light: tropische ochtendzon ----
-    const hemi = new THREE.HemisphereLight(0xcfe3ec, 0x4a5a30, 0.85);
+    const hemi = new THREE.HemisphereLight(0xcfe3ec, 0x4a5a30, 1.05);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
+    const sun = new THREE.DirectionalLight(0xfff2d6, 1.7);
     sun.position.set(40, 60, 25);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -201,6 +205,7 @@
     grd.addColorStop(1.0, "#cdd6b8");   // horizon: groenig dampig
     ctx.fillStyle = grd; ctx.fillRect(0, 0, 16, 256);
     const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(300, 24, 16),
       new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
@@ -393,6 +398,7 @@
     ctx.lineWidth = 7; ctx.strokeStyle = "#1a1a1a"; ctx.stroke();
     ctx.fillStyle = "#f4f0e6"; ctx.beginPath(); ctx.arc(168, 66, 5, 0, Math.PI*2); ctx.fill(); // wit oog/manen
     const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
 
     const flagGeo = new THREE.PlaneGeometry(3.4, 2.2, 16, 8);
     flagMesh = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide }));
@@ -594,6 +600,7 @@
   function startSiege() {
     phase = PHASE.BELEGERING;
     phaseLabel.textContent = "Belegering";
+    setPhaseUI(PHASE.BELEGERING);
     scene.background = new THREE.Color(0x8a8276);
     scene.fog.color.set(0x9a8f7e);
     scene.fog.density = 0.011;
@@ -940,6 +947,18 @@
   function lockPointer() { if (!isTouch) renderer.domElement.requestPointerLock(); }
   function showTouch(on) { if (isTouch) $("touch").classList.toggle("on", on); }
 
+  // Toon gevecht-UI (richtkruis, munitie, vuur/herlaad) pas in de belegering
+  function setPhaseUI(p) {
+    const siege = p === PHASE.BELEGERING;
+    $("stats").style.display = siege ? "block" : "none";
+    $("crosshair").style.display = siege ? "block" : "none";
+    if (isTouch) {
+      $("btnFire").style.display = siege ? "flex" : "none";
+      $("btnReload").style.display = siege ? "flex" : "none";
+      $("btnAct").style.display = siege ? "none" : "flex";
+    }
+  }
+
   // ---- Touch controls (mobiel) ----
   function setupTouch() {
     if (!isTouch) return;
@@ -1014,6 +1033,7 @@
     hud.style.display = "block";
     phase = PHASE.VERKENNING;
     phaseLabel.textContent = "Verkenning";
+    setPhaseUI(PHASE.VERKENNING);
     setObjective("Verken Fort Boekoe — loop naar de <b>gouden ringen</b> en bekijk ze (E).");
     audioInit(); startAmbient();
     player.pos.set(0, PLAYER_H, 10); yaw = Math.PI;
