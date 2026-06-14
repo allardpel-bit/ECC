@@ -108,7 +108,7 @@
   function buildWorld() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9fb6c4);
-    scene.fog = new THREE.FogExp2(0xa7bcc6, 0.010);
+    scene.fog = new THREE.FogExp2(0xc2d2c4, 0.0055);
 
     camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 600);
 
@@ -132,6 +132,7 @@
     sun.shadow.camera.far = 200;
     scene.add(sun);
 
+    buildSky();
     buildGround();
     buildSwamp();
     buildPalisade();
@@ -140,8 +141,85 @@
     buildCampfire();
     buildJungle();
     buildCannons();
+    buildGroundCover();
     buildVerkenningMarkers();
     buildVillagers();
+  }
+
+  // ---- grasplukken, varens en struiken voor leven ----
+  function buildGroundCover() {
+    const bladeMats = [0x4e7a2e, 0x5d8a34, 0x3f6b2a].map((c) => new THREE.MeshStandardMaterial({ color: c }));
+    function tuft(x, z, scale) {
+      const g = new THREE.Group();
+      const n = 4 + (Math.random() * 4 | 0);
+      for (let i = 0; i < n; i++) {
+        const h = rand(0.35, 0.8) * scale;
+        const b = new THREE.Mesh(new THREE.ConeGeometry(0.05 * scale, h, 4), bladeMats[i % 3]);
+        b.position.set(rand(-0.2, 0.2) * scale, h / 2, rand(-0.2, 0.2) * scale);
+        b.rotation.z = rand(-0.3, 0.3); g.add(b);
+      }
+      g.position.set(x, 0, z); scene.add(g);
+    }
+    // plukken op de rits (rond de hutten) — vermijd het centrum-plein
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * Math.PI * 2, r = rand(6, FORT_R - 1.5);
+      tuft(Math.cos(a) * r, Math.sin(a) * r, rand(0.7, 1.3));
+    }
+    // dichte rand net binnen de palissade
+    for (let i = 0; i < 60; i++) {
+      const a = Math.random() * Math.PI * 2;
+      tuft(Math.cos(a) * (FORT_R - rand(0.5, 2)), Math.sin(a) * (FORT_R - rand(0.5, 2)), rand(0.8, 1.4));
+    }
+    // struiken (bollen) verspreid binnen en net buiten
+    const bushMat = (h) => new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.27, 0.5, h) });
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() > 0.5 ? rand(7, FORT_R - 3) : rand(FORT_R + 7, FORT_R + 16);
+      const g = new THREE.Group();
+      for (let k = 0; k < 3; k++) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(rand(0.5, 1), 7, 6), bushMat(rand(0.22, 0.32)));
+        b.position.set(rand(-0.5, 0.5), rand(0.4, 0.8), rand(-0.5, 0.5)); b.castShadow = true; g.add(b);
+      }
+      g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); scene.add(g);
+    }
+    // wat losse boomstammen/voorraad bij het kampvuur
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3320 });
+    for (let i = 0; i < 5; i++) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, rand(1, 1.6), 6), woodMat);
+      log.rotation.z = Math.PI / 2; log.rotation.y = rand(0, 6.28);
+      log.position.set(-2.5 + rand(-2.2, 2.2), 0.13, 5.5 + rand(-1.5, 1.5)); log.castShadow = true; scene.add(log);
+    }
+  }
+
+  // ---- tropische luchtkoepel met kleurverloop ----
+  function buildSky() {
+    const cv = document.createElement("canvas"); cv.width = 16; cv.height = 256;
+    const ctx = cv.getContext("2d");
+    const grd = ctx.createLinearGradient(0, 0, 0, 256);
+    grd.addColorStop(0.0, "#4f86b8");   // hoog: helderblauw
+    grd.addColorStop(0.5, "#9fc2d6");
+    grd.addColorStop(0.78, "#dfe9e2");  // wat heiig boven het moeras
+    grd.addColorStop(1.0, "#cdd6b8");   // horizon: groenig dampig
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 16, 256);
+    const tex = new THREE.CanvasTexture(cv);
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(300, 24, 16),
+      new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
+    );
+    scene.add(sky);
+    scene._sky = sky;
+
+    // een paar zachte wolken
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, fog: false });
+    for (let i = 0; i < 10; i++) {
+      const c = new THREE.Group();
+      const a = Math.random() * Math.PI * 2, r = rand(120, 200), h = rand(60, 110);
+      for (let k = 0; k < 4; k++) {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(rand(8, 16), 8, 6), cloudMat);
+        puff.position.set(rand(-14, 14), rand(-3, 3), rand(-8, 8)); puff.scale.y = 0.55; c.add(puff);
+      }
+      c.position.set(Math.cos(a) * r, h, Math.sin(a) * r);
+      scene.add(c);
+    }
   }
 
   // ---- de zandrits + savanne ----
@@ -224,10 +302,16 @@
       if (Math.abs(((a - gateA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > Math.PI - gateW) continue;
       colliders.push({ x: Math.cos(a) * FORT_R, z: Math.sin(a) * FORT_R, r: 1.2 });
     }
-    // horizontale dwarsbalken (binnenring) — geeft 'wand' gevoel
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(FORT_R, 0.12, 6, 80), logMatDk);
-    ring.rotation.x = Math.PI / 2; ring.position.y = WALL_H * 0.55; scene.add(ring);
-    const ring2 = ring.clone(); ring2.position.y = WALL_H * 0.85; scene.add(ring2);
+    // horizontale dwarsbalken: korte segmenten tussen de palen, met een gat bij de poort
+    [WALL_H * 0.55, WALL_H * 0.85].forEach((hy) => {
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        if (Math.abs(((a - gateA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > Math.PI - gateW) continue;
+        const seg = new THREE.Mesh(new THREE.BoxGeometry((Math.PI * 2 * FORT_R / N) * 1.1, 0.14, 0.14), logMatDk);
+        seg.position.set(Math.cos(a) * FORT_R, hy, Math.sin(a) * FORT_R);
+        seg.lookAt(0, hy, 0); scene.add(seg);
+      }
+    });
 
     // poortpalen
     [gateA - gateW, gateA + gateW].forEach((a) => {
@@ -247,6 +331,12 @@
       const px = Math.cos(a) * (FORT_R - 1.6), pz = Math.sin(a) * (FORT_R - 1.6);
       plat.position.set(px, 1.6, pz); plat.lookAt(0, 1.6, 0); plat.castShadow = true; plat.receiveShadow = true;
       scene.add(plat);
+      // steunpalen tot de grond
+      const right = new THREE.Vector3(-Math.sin(a), 0, Math.cos(a));
+      [-1.4, 1.4].forEach((off) => {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.6, 6), logMatDk);
+        leg.position.set(px + right.x * off, 0.8, pz + right.z * off); leg.castShadow = true; scene.add(leg);
+      });
     });
   }
 
@@ -370,21 +460,28 @@
       new THREE.MeshStandardMaterial({ color: 0x4e3a24 }));
     const th = trunk.geometry.parameters.height; trunk.position.y = th / 2; trunk.castShadow = true; g.add(trunk);
     const cm = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.28, 0.5, rand(0.22, 0.34)) });
-    for (let i = 0; i < 4; i++) {
-      const blob = new THREE.Mesh(new THREE.SphereGeometry(rand(1.6, 2.6), 7, 6), cm);
-      blob.position.set(rand(-1.2, 1.2), th + rand(-0.4, 1.2), rand(-1.2, 1.2));
+    for (let i = 0; i < 6; i++) {
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(rand(1.7, 2.8), 7, 6), cm);
+      // lagere bollen overlappen de stam zodat de boom niet 'zweeft'
+      blob.position.set(rand(-1.3, 1.3), th - 0.6 + rand(0, 1.8), rand(-1.3, 1.3));
       blob.castShadow = true; g.add(blob);
     }
     g.position.set(x, 0, z); scene.add(g);
   }
   function buildJungle() {
-    for (let i = 0; i < 70; i++) {
-      const a = Math.random() * Math.PI * 2, r = rand(FORT_R + 9, 130);
+    // verspreide jungle in het moeras
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * Math.PI * 2, r = rand(FORT_R + 9, 150);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       Math.random() > 0.45 ? makePalm(x, z) : makeTree(x, z);
     }
-    // een paar bomen/struiken binnen het fort
-    for (let i = 0; i < 5; i++) makeTree(rand(-FORT_R + 5, FORT_R - 5), rand(-FORT_R + 5, FORT_R - 5));
+    // dichte boomwand aan de horizon (zoals het diorama)
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 + rand(-0.05, 0.05), r = rand(95, 120);
+      makeTree(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    // een paar bomen binnen het fort
+    for (let i = 0; i < 4; i++) makeTree(rand(-FORT_R + 6, FORT_R - 6), rand(-FORT_R + 6, FORT_R - 6));
   }
 
   // ---- twee draaibassen (rotating cannons) ----
@@ -499,7 +596,8 @@
     phaseLabel.textContent = "Belegering";
     scene.background = new THREE.Color(0x8a8276);
     scene.fog.color.set(0x9a8f7e);
-    scene.fog.density = 0.016;
+    scene.fog.density = 0.011;
+    if (scene._sky) scene._sky.material.color.set(0x8f8a7a); // grimmiger licht
     // markers weghalen
     markers.forEach((m) => { scene.remove(m.ring); scene.remove(m.col); });
     markers.length = 0;
@@ -872,7 +970,8 @@
       const d = Math.hypot(dx, dy) || 1;
       if (d > R) { dx = dx / d * R; dy = dy / d * R; }
       stick.style.transform = `translate(${dx}px,${dy}px)`;
-      touchMove.set(dx / R, -dy / R);   // omhoog = vooruit
+      // omhoog = vooruit (richting blik), links = naar links strafen
+      touchMove.set(-dx / R, dy / R);
     }
 
     // kijken: sleep in de rechterzone
