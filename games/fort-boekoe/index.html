@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Fort Boekoe — De Belegering (1772)</title>
+<style>
+  :root {
+    --geel: #e9c84a;
+    --donker: #1a140c;
+    --aarde: #6b4a2a;
+    --blad: #2f5d34;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #000; }
+  body {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    color: #f3e9d2;
+    -webkit-user-select: none; user-select: none;
+  }
+  canvas { display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    display: none;
+  }
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    width: 22px; height: 22px; margin: -11px 0 0 -11px;
+    opacity: 0.85;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: rgba(255,255,255,0.8);
+  }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+
+  .panel {
+    position: absolute; background: rgba(20,15,8,0.78);
+    border: 1px solid rgba(233,200,74,0.55);
+    border-radius: 8px; padding: 10px 14px;
+    backdrop-filter: blur(2px);
+  }
+  #stats { left: 18px; bottom: 18px; min-width: 220px; }
+  #stats .row { display: flex; justify-content: space-between; font-size: 15px; margin: 3px 0; }
+  #stats .label { color: var(--geel); letter-spacing: .5px; }
+  .bar { height: 9px; background: rgba(255,255,255,.15); border-radius: 5px; overflow: hidden; margin-top: 2px; }
+  .bar > i { display: block; height: 100%; }
+  #healthFill { background: linear-gradient(90deg,#8b1a1a,#d23b3b); }
+  #moraleFill { background: linear-gradient(90deg,#7a5c12,#e9c84a); }
+
+  #objective {
+    top: 16px; left: 50%; transform: translateX(-50%);
+    text-align: center; max-width: 560px;
+  }
+  #objective .ttl { color: var(--geel); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+  #objective .txt { font-size: 18px; margin-top: 2px; }
+
+  #compass {
+    top: 16px; right: 18px; font-size: 14px; text-align: right; min-width: 150px;
+  }
+  #compass .big { font-size: 22px; color: var(--geel); }
+
+  #prompt {
+    bottom: 22%; left: 50%; transform: translateX(-50%);
+    font-size: 17px; text-align: center; display: none;
+  }
+  #prompt b { color: var(--geel); }
+
+  #damage {
+    position: absolute; inset: 0; box-shadow: inset 0 0 220px 40px rgba(160,0,0,0.0);
+    transition: box-shadow .12s; pointer-events: none;
+  }
+
+  #toast {
+    position: absolute; bottom: 30%; left: 50%; transform: translateX(-50%);
+    background: rgba(20,15,8,0.85); border-left: 3px solid var(--geel);
+    padding: 12px 18px; max-width: 520px; font-size: 16px; line-height: 1.4;
+    opacity: 0; transition: opacity .4s; border-radius: 4px;
+  }
+
+  /* ---------- Overlay screens ---------- */
+  .screen {
+    position: fixed; inset: 0; z-index: 30; overflow-y: auto;
+    background:
+      radial-gradient(circle at 50% 18%, rgba(60,45,20,.55), rgba(8,6,3,.96) 70%),
+      linear-gradient(180deg, #0a0803, #140e06);
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 20px;
+  }
+  .card { max-width: 760px; width: 100%; pointer-events: auto; }
+  h1 {
+    font-size: clamp(34px, 6vw, 60px); color: var(--geel);
+    letter-spacing: 3px; text-shadow: 0 3px 18px rgba(0,0,0,.8); line-height: 1;
+  }
+  h1 small { display: block; font-size: 16px; letter-spacing: 6px; color: #cdbb88; margin-top: 10px; }
+  .lead { font-size: 17px; line-height: 1.65; margin: 18px 0; color: #e7dcc1; }
+  .flagmark {
+    width: 92px; height: 64px; margin: 0 auto 8px; border: 2px solid #111;
+    background: var(--geel); border-radius: 3px; position: relative;
+    display: flex; align-items: center; justify-content: center; font-size: 34px;
+    box-shadow: 0 6px 22px rgba(0,0,0,.6);
+  }
+  .quote { font-style: italic; color: #cdbb88; border-left: 3px solid var(--geel); padding-left: 14px; margin: 16px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+  .fact { background: rgba(255,255,255,.04); border: 1px solid rgba(233,200,74,.25); border-radius: 6px; padding: 10px 12px; font-size: 14px; }
+  .fact b { color: var(--geel); display: block; margin-bottom: 2px; letter-spacing: .5px; }
+  button.cta {
+    pointer-events: auto; cursor: pointer; font-family: inherit;
+    background: var(--geel); color: #1a140c; border: none; border-radius: 6px;
+    font-size: 19px; font-weight: bold; letter-spacing: 1px; padding: 14px 34px;
+    margin-top: 10px; transition: transform .1s, box-shadow .2s;
+    box-shadow: 0 6px 0 #9c7e1f;
+  }
+  button.cta:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #9c7e1f; }
+  button.cta:active { transform: translateY(4px); box-shadow: 0 2px 0 #9c7e1f; }
+  button.ghost {
+    pointer-events: auto; cursor: pointer; font-family: inherit; background: transparent;
+    color: #cdbb88; border: 1px solid rgba(233,200,74,.4); border-radius: 6px;
+    font-size: 15px; padding: 11px 22px; margin: 10px 6px 0 0;
+  }
+  button.ghost:hover { color: var(--geel); border-color: var(--geel); }
+  .controls { font-size: 14px; color: #b9ac8c; margin-top: 16px; line-height: 1.8; }
+  .controls kbd {
+    background: #2a2113; border: 1px solid #5a4a25; border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 7px; color: var(--geel); font-family: monospace; font-size: 13px;
+  }
+  .src { font-size: 12px; color: #8a7d5e; margin-top: 22px; line-height: 1.6; }
+  .src a { color: #b09a63; }
+  #loading {
+    position: fixed; inset: 0; z-index: 40; background: #0a0803;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    color: var(--geel); font-size: 18px; letter-spacing: 2px;
+  }
+  .spin { width: 42px; height: 42px; border: 3px solid rgba(233,200,74,.25); border-top-color: var(--geel);
+    border-radius: 50%; animation: r 1s linear infinite; margin-bottom: 18px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .fade { animation: fadein .8s ease; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- Touch controls (mobiel) ---------- */
+  #touch { position: fixed; inset: 0; z-index: 20; display: none; pointer-events: none; }
+  #touch.on { display: block; }
+  #lookZone {
+    position: absolute; top: 0; right: 0; width: 60%; height: 100%;
+    pointer-events: auto; touch-action: none;
+  }
+  #joy {
+    position: absolute; left: 22px; bottom: 26px; width: 128px; height: 128px;
+    border-radius: 50%; background: rgba(20,15,8,0.35);
+    border: 2px solid rgba(233,200,74,0.5); pointer-events: auto; touch-action: none;
+  }
+  #joyStick {
+    position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+    border-radius: 50%; background: rgba(233,200,74,0.65); transition: transform .03s;
+  }
+  .tbtn {
+    position: absolute; pointer-events: auto; touch-action: none;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20,15,8,0.5); border: 2px solid rgba(233,200,74,0.6);
+    color: var(--geel); font-family: inherit; text-align: center; line-height: 1.05;
+    -webkit-user-select: none; user-select: none;
+  }
+  .tbtn:active { background: rgba(233,200,74,0.35); }
+  #btnFire { right: 26px; bottom: 40px; width: 110px; height: 110px; font-size: 17px; font-weight: bold; }
+  #btnReload { right: 150px; bottom: 56px; width: 70px; height: 70px; font-size: 13px; }
+  #btnAct { right: 78px; bottom: 158px; width: 76px; height: 76px; font-size: 14px; }
+  @media (max-width: 760px) {
+    #stats { transform: scale(.85); transform-origin: left bottom; }
+    #objective { max-width: 70vw; font-size: 90%; }
+    #objective .txt { font-size: 15px; }
+    #compass { transform: scale(.85); transform-origin: right top; }
+    .grid2 { grid-template-columns: 1fr; }
+    #prompt { bottom: 30%; font-size: 15px; width: 86%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div>Fort Boekoe wordt opgebouwd…</div></div>
+
+<!-- TITLE -->
+<div class="screen" id="titleScreen" style="display:none">
+  <div class="card fade" style="text-align:center">
+    <div class="flagmark" title="Vlag van Fort Boekoe">🦁</div>
+    <h1>FORT BOEKOE<small>SURINAME · 1771 – 1772</small></h1>
+    <p class="lead">
+      Diep in het moeras achter de Cottica, op een verborgen zandrits, bouwden de
+      <b>Marrons</b> — zelfbevrijde tot slaaf gemaakten — een vesting onder leiding van
+      <b>Boni</b>, <b>Baron</b> en <b>Jolicoeur</b>. Een palissade van vijf meter hoog,
+      omringd door zwamp, met paden die onder water verborgen lagen.
+    </p>
+    <p class="quote">"Boekoe" — tot stof vergaan. Zo noemde Boni het fort:<br>
+      liever tot stof dan terug in de ketenen.</p>
+    <div class="grid2">
+      <div class="fact"><b>Gesticht</b>1771, op een rits in het moeras ten oosten van de Barbakoebakreek</div>
+      <div class="fact"><b>Verdediging</b>Palissade van 5 m met schietgaten, twee draaibassen, verborgen waterpaden</div>
+      <div class="fact"><b>Verdedigers</b>Boni-marrons — mannen, vrouwen en kinderen die zichzelf bevrijdden</div>
+      <div class="fact"><b>De val</b>20 september 1772 — de Zwarte Jagers braken door de palissade; Boni ontkwam</div>
+    </div>
+    <button class="cta" id="btnStart">Begin het verhaal</button>
+    <div class="controls">
+      <kbd>W A S D</kbd> lopen &nbsp;·&nbsp; <kbd>muis</kbd> rondkijken &nbsp;·&nbsp;
+      <kbd>klik</kbd> schieten &nbsp;·&nbsp; <kbd>R</kbd> herladen &nbsp;·&nbsp;
+      <kbd>E</kbd> bekijken &nbsp;·&nbsp; <kbd>Shift</kbd> rennen
+      <br><span style="color:#9a8c6c">📱 Mobiel: joystick links om te lopen, sleep rechts om te kijken, knoppen om te schieten/herladen/bekijken.</span>
+    </div>
+    <div class="src">
+      Historische bronnen: nl.wikipedia.org/wiki/Fort_Boekoe · nl.wikipedia.org/wiki/Marrons_van_Suriname · kibrimi.sr/fort-boekoe.<br>
+      Een interactief eerbetoon. Locaties en personen zijn historisch; de 3D-wereld is een artistieke reconstructie.
+    </div>
+  </div>
+</div>
+
+<!-- BRIEFING before siege -->
+<div class="screen" id="briefScreen" style="display:none">
+  <div class="card fade">
+    <h1 style="font-size:40px">DE BELEGERING<small>20 SEPTEMBER 1772</small></h1>
+    <p class="lead">
+      Een verborgen pad is verraden. Aan de overkant van het moeras heeft kapitein
+      <b>Oorsinga</b> zijn kamp opgeslagen, en nu trekken de gevreesde
+      <b>Zwarte Jagers</b> (Redi Musu) in hun rode mutsen door de zwamp naar de palissade.
+    </p>
+    <p class="lead">
+      De vrouwen en kinderen zijn al weggevoerd naar <b>Locusboom</b>, dieper het bos in.
+      Jouw taak: <b>houd de palissade</b> en geef Boni de tijd om langs de verborgen
+      waterpaden te ontkomen. Het fort zal vallen — maar de mensen zullen leven.
+    </p>
+    <div class="grid2">
+      <div class="fact"><b>Jouw wapen</b>Voorlaadmusket — traag herladen (<kbd>R</kbd>). Mik en wacht.</div>
+      <div class="fact"><b>Draaibas</b>Loop naar de geschutsplatformen voor het zware geschut.</div>
+      <div class="fact"><b>Doel</b>Overleef de aanvalsgolven tot Boni's vlucht voltooid is.</div>
+      <div class="fact"><b>Moraal</b>Valt de moraal tot nul, dan breekt de linie.</div>
+    </div>
+    <button class="cta" id="btnSiege">Naar de palissade</button>
+  </div>
+</div>
+
+<!-- END -->
+<div class="screen" id="endScreen" style="display:none">
+  <div class="card fade" style="text-align:center" id="endCard"></div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="damage"></div>
+  <div class="panel" id="objective"><div class="ttl">Opdracht</div><div class="txt" id="objText">—</div></div>
+  <div class="panel" id="compass"><div class="big" id="compassDir">N</div><div id="phaseLabel">Verkenning</div></div>
+  <div class="panel" id="stats">
+    <div class="row"><span class="label">Leven</span><span id="healthNum">100</span></div>
+    <div class="bar"><i id="healthFill" style="width:100%"></i></div>
+    <div class="row" style="margin-top:6px"><span class="label">Moraal v/h fort</span><span id="moraleNum">100</span></div>
+    <div class="bar"><i id="moraleFill" style="width:100%"></i></div>
+    <div class="row" style="margin-top:6px"><span class="label">Musket</span><span id="ammoText">1 / 1</span></div>
+  </div>
+  <div id="prompt"></div>
+  <div id="toast"></div>
+</div>
+
+<!-- Touch controls -->
+<div id="touch">
+  <div id="lookZone"></div>
+  <div id="joy"><div id="joyStick"></div></div>
+  <div class="tbtn" id="btnFire">VUUR</div>
+  <div class="tbtn" id="btnReload">HER&shy;LAAD</div>
+  <div class="tbtn" id="btnAct">BEKIJK</div>
+</div>
+
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

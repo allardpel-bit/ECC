@@ -1,0 +1,50 @@
+name: Deploy Fort Boekoe game
+
+# Publishes games/fort-boekoe to GitHub Pages so the game is playable
+# at https://<owner>.github.io/<repo>/ without any local setup.
+
+on:
+  push:
+    branches: [main, claude/fort-boekoe-game-7ouhze]
+    paths:
+      - 'games/fort-boekoe/**'
+      - '.github/workflows/deploy-fort-boekoe.yml'
+  workflow_dispatch:
+
+# Permissions required to deploy to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload game as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Serve the game folder as the site root, so index.html loads directly
+          path: games/fort-boekoe
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
