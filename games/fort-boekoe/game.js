@@ -112,17 +112,21 @@
 
     camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 600);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // betere kleur- en lichtkwaliteit
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     document.body.appendChild(renderer.domElement);
 
     // ---- light: tropische ochtendzon ----
-    const hemi = new THREE.HemisphereLight(0xcfe3ec, 0x4a5a30, 0.85);
+    const hemi = new THREE.HemisphereLight(0xcfe3ec, 0x4a5a30, 1.05);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
+    const sun = new THREE.DirectionalLight(0xfff2d6, 1.7);
     sun.position.set(40, 60, 25);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -201,6 +205,7 @@
     grd.addColorStop(1.0, "#cdd6b8");   // horizon: groenig dampig
     ctx.fillStyle = grd; ctx.fillRect(0, 0, 16, 256);
     const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(300, 24, 16),
       new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
@@ -280,7 +285,7 @@
   function buildPalisade() {
     const logMat = new THREE.MeshStandardMaterial({ color: 0x6b4a28, roughness: 1 });
     const logMatDk = new THREE.MeshStandardMaterial({ color: 0x5a3d20, roughness: 1 });
-    const N = 84;
+    const N = 190;                         // dicht op elkaar zodat de wand massief is
     const gateA = -Math.PI / 2;           // poort op noordzijde (richting -z)
     const gateW = 0.34;                    // hoekbreedte poortopening
     for (let i = 0; i < N; i++) {
@@ -289,7 +294,7 @@
       if (Math.abs(((a - gateA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > Math.PI - gateW) continue;
       const x = Math.cos(a) * FORT_R, z = Math.sin(a) * FORT_R;
       const h = WALL_H + rand(-0.25, 0.45);
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.30, h, 6), i % 2 ? logMat : logMatDk);
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, h, 6), i % 2 ? logMat : logMatDk);
       log.position.set(x, h / 2, z);
       log.lookAt(0, h / 2, 0); log.rotateX(Math.PI / 2);
       log.rotation.z += rand(-0.04, 0.04);
@@ -302,13 +307,14 @@
       if (Math.abs(((a - gateA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > Math.PI - gateW) continue;
       colliders.push({ x: Math.cos(a) * FORT_R, z: Math.sin(a) * FORT_R, r: 1.2 });
     }
-    // horizontale dwarsbalken: korte segmenten tussen de palen, met een gat bij de poort
-    [WALL_H * 0.55, WALL_H * 0.85].forEach((hy) => {
-      for (let i = 0; i < N; i++) {
-        const a = (i / N) * Math.PI * 2;
+    // horizontale dwarsbalken aan de buitenkant: coarser segmenten, gat bij de poort
+    const M = 70;
+    [WALL_H * 0.5, WALL_H * 0.82].forEach((hy) => {
+      for (let i = 0; i < M; i++) {
+        const a = (i / M) * Math.PI * 2;
         if (Math.abs(((a - gateA + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > Math.PI - gateW) continue;
-        const seg = new THREE.Mesh(new THREE.BoxGeometry((Math.PI * 2 * FORT_R / N) * 1.1, 0.14, 0.14), logMatDk);
-        seg.position.set(Math.cos(a) * FORT_R, hy, Math.sin(a) * FORT_R);
+        const seg = new THREE.Mesh(new THREE.BoxGeometry((Math.PI * 2 * FORT_R / M) * 1.08, 0.16, 0.16), logMatDk);
+        seg.position.set(Math.cos(a) * (FORT_R + 0.42), hy, Math.sin(a) * (FORT_R + 0.42));
         seg.lookAt(0, hy, 0); scene.add(seg);
       }
     });
@@ -393,6 +399,7 @@
     ctx.lineWidth = 7; ctx.strokeStyle = "#1a1a1a"; ctx.stroke();
     ctx.fillStyle = "#f4f0e6"; ctx.beginPath(); ctx.arc(168, 66, 5, 0, Math.PI*2); ctx.fill(); // wit oog/manen
     const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
 
     const flagGeo = new THREE.PlaneGeometry(3.4, 2.2, 16, 8);
     flagMesh = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide }));
@@ -594,6 +601,7 @@
   function startSiege() {
     phase = PHASE.BELEGERING;
     phaseLabel.textContent = "Belegering";
+    setPhaseUI(PHASE.BELEGERING);
     scene.background = new THREE.Color(0x8a8276);
     scene.fog.color.set(0x9a8f7e);
     scene.fog.density = 0.011;
@@ -764,8 +772,9 @@
   // ====================================================================
   function updatePlayer(dt) {
     const speed = (keys["shift"] ? 7.2 : 4.2) * dt;
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const right = new THREE.Vector3(Math.sin(yaw + Math.PI / 2), 0, Math.cos(yaw + Math.PI / 2));
+    // werkelijke kijkrichting (horizontaal) en rechtervector
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     const move = new THREE.Vector3();
     if (keys["w"]) move.add(forward);
     if (keys["s"]) move.sub(forward);
@@ -777,7 +786,7 @@
     }
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);
 
-    let nx = player.pos.x - move.x, nz = player.pos.z - move.z;
+    let nx = player.pos.x + move.x, nz = player.pos.z + move.z;
 
     // collision met palen/hutten
     for (const c of colliders) {
@@ -940,6 +949,18 @@
   function lockPointer() { if (!isTouch) renderer.domElement.requestPointerLock(); }
   function showTouch(on) { if (isTouch) $("touch").classList.toggle("on", on); }
 
+  // Toon gevecht-UI (richtkruis, munitie, vuur/herlaad) pas in de belegering
+  function setPhaseUI(p) {
+    const siege = p === PHASE.BELEGERING;
+    $("stats").style.display = siege ? "block" : "none";
+    $("crosshair").style.display = siege ? "block" : "none";
+    if (isTouch) {
+      $("btnFire").style.display = siege ? "flex" : "none";
+      $("btnReload").style.display = siege ? "flex" : "none";
+      $("btnAct").style.display = siege ? "none" : "flex";
+    }
+  }
+
   // ---- Touch controls (mobiel) ----
   function setupTouch() {
     if (!isTouch) return;
@@ -970,8 +991,8 @@
       const d = Math.hypot(dx, dy) || 1;
       if (d > R) { dx = dx / d * R; dy = dy / d * R; }
       stick.style.transform = `translate(${dx}px,${dy}px)`;
-      // omhoog = vooruit (richting blik), links = naar links strafen
-      touchMove.set(-dx / R, dy / R);
+      // omhoog = vooruit (richting blik), rechts = naar rechts strafen
+      touchMove.set(dx / R, -dy / R);
     }
 
     // kijken: sleep in de rechterzone
@@ -1014,6 +1035,7 @@
     hud.style.display = "block";
     phase = PHASE.VERKENNING;
     phaseLabel.textContent = "Verkenning";
+    setPhaseUI(PHASE.VERKENNING);
     setObjective("Verken Fort Boekoe — loop naar de <b>gouden ringen</b> en bekijk ze (E).");
     audioInit(); startAmbient();
     player.pos.set(0, PLAYER_H, 10); yaw = Math.PI;
